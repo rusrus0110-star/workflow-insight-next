@@ -115,7 +115,7 @@ export default function RegisterPage() {
           {errorMessage && (
             <Alert
               type="error"
-              message={errorMessage}
+              title={errorMessage}
               style={{ marginBottom: 16 }}
             />
           )}
