@@ -518,95 +518,116 @@ export default function WorkflowsPage() {
                   borderRadius: 18,
                   height: "100%",
                 }}
+                styles={{
+                  body: {
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                  },
+                }}
               >
                 <div
                   style={{
+                    height: "100%",
                     display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    marginBottom: 12,
+                    flexDirection: "column",
+                    flex: 1,
                   }}
                 >
-                  <Tag color="blue">{workflow.category}</Tag>
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        marginBottom: 12,
+                      }}
+                    >
+                      <Tag color="blue">{workflow.category}</Tag>
 
-                  <Tag color={priorityColorMap[workflow.priority]}>
-                    {workflow.priority.toUpperCase()}
-                  </Tag>
-                </div>
+                      <Tag color={priorityColorMap[workflow.priority]}>
+                        {workflow.priority.toUpperCase()}
+                      </Tag>
+                    </div>
 
-                <Title level={4} style={{ marginTop: 0, marginBottom: 8 }}>
-                  {workflow.title}
-                </Title>
+                    <Title level={4} style={{ marginTop: 0, marginBottom: 8 }}>
+                      {workflow.title}
+                    </Title>
 
-                <p style={descriptionClampStyle}>
-                  {workflow.description || "No description provided."}
-                </p>
+                    <p style={descriptionClampStyle}>
+                      {workflow.description || "No description provided."}
+                    </p>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gap: 8,
-                    marginBottom: 20,
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  <Text>
-                    Frequency: <strong>{workflow.frequency}</strong>
-                  </Text>
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 8,
+                        marginBottom: 20,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      <Text>
+                        Frequency: <strong>{workflow.frequency}</strong>
+                      </Text>
 
-                  <Text>
-                    Effort:{" "}
-                    <Tag color={effortColorMap[workflow.effort]}>
-                      {workflow.effort.toUpperCase()}
-                    </Tag>
-                  </Text>
+                      <Text>
+                        Effort:{" "}
+                        <Tag color={effortColorMap[workflow.effort]}>
+                          {workflow.effort.toUpperCase()}
+                        </Tag>
+                      </Text>
 
-                  <Text>
-                    Current streak: <strong>{workflow.currentStreak}</strong>
-                  </Text>
+                      <Text>
+                        Current streak:{" "}
+                        <strong>{workflow.currentStreak}</strong>
+                      </Text>
 
-                  <Text>
-                    Best streak: <strong>{workflow.bestStreak}</strong>
-                  </Text>
+                      <Text>
+                        Best streak: <strong>{workflow.bestStreak}</strong>
+                      </Text>
 
-                  <Text>
-                    Total completions:{" "}
-                    <strong>{workflow.totalCompletions}</strong>
-                  </Text>
-                </div>
+                      <Text>
+                        Total completions:{" "}
+                        <strong>{workflow.totalCompletions}</strong>
+                      </Text>
+                    </div>
+                  </div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 8,
-                    marginBottom: 8,
-                  }}
-                >
-                  <Button onClick={() => openEditModal(workflow)}>
-                    <EditOutlined /> Edit
-                  </Button>
+                  <div style={{ marginTop: "auto" }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <Button onClick={() => openEditModal(workflow)}>
+                        <EditOutlined /> Edit
+                      </Button>
 
-                  <Popconfirm
-                    title="Delete workflow"
-                    description="Are you sure you want to delete this workflow?"
-                    okText="Delete"
-                    cancelText="Cancel"
-                    onConfirm={() => handleDeleteWorkflow(workflow._id)}
-                  >
-                    <Button danger>
-                      <DeleteOutlined /> Delete
+                      <Popconfirm
+                        title="Delete workflow"
+                        description="Are you sure you want to delete this workflow?"
+                        okText="Delete"
+                        cancelText="Cancel"
+                        onConfirm={() => handleDeleteWorkflow(workflow._id)}
+                      >
+                        <Button danger>
+                          <DeleteOutlined /> Delete
+                        </Button>
+                      </Popconfirm>
+                    </div>
+
+                    <Button
+                      type="primary"
+                      block
+                      onClick={() => openLogModal(workflow._id)}
+                    >
+                      Log activity
                     </Button>
-                  </Popconfirm>
+                  </div>
                 </div>
-
-                <Button
-                  type="primary"
-                  block
-                  onClick={() => openLogModal(workflow._id)}
-                >
-                  Log activity
-                </Button>
               </Card>
             ))}
           </div>

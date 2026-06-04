@@ -2,236 +2,295 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 
+import { DEMO_USER } from "@/lib/constants";
 import User from "@/models/User";
 import Workflow from "@/models/Workflow";
 import Progress from "@/models/Progress";
-import { DEMO_USER } from "@/lib/constants";
 
 dotenv.config({ path: ".env.local" });
 
-const connectDb = async () => {
+type WorkflowSeed = {
+  title: string;
+  description: string;
+  category:
+    | "sales"
+    | "marketing"
+    | "operations"
+    | "customer_success"
+    | "automation";
+  frequency: "daily" | "weekly" | "monthly";
+  priority: "low" | "medium" | "high";
+  effort: "low" | "medium" | "high";
+  pattern:
+    | "stable"
+    | "declining"
+    | "abandoned"
+    | "workload_risk"
+    | "recent_recovery"
+    | "low_activity";
+};
+
+const demoWorkflows: WorkflowSeed[] = [
+  {
+    title: "CRM follow-up review",
+    description:
+      "Review open leads, check last contact dates and define the next follow-up action for warm prospects.",
+    category: "sales",
+    frequency: "weekly",
+    priority: "high",
+    effort: "medium",
+    pattern: "stable",
+  },
+  {
+    title: "New lead qualification",
+    description:
+      "Qualify new inbound leads, check source quality, business fit and next-step readiness.",
+    category: "sales",
+    frequency: "daily",
+    priority: "high",
+    effort: "medium",
+    pattern: "stable",
+  },
+  {
+    title: "Stalled deal check",
+    description:
+      "Identify deals without recent activity and define recovery actions for each stalled opportunity.",
+    category: "sales",
+    frequency: "weekly",
+    priority: "high",
+    effort: "high",
+    pattern: "declining",
+  },
+  {
+    title: "Weekly pipeline update",
+    description:
+      "Update pipeline stages, review expected close dates and check high-value opportunities.",
+    category: "sales",
+    frequency: "weekly",
+    priority: "high",
+    effort: "medium",
+    pattern: "stable",
+  },
+  {
+    title: "LinkedIn outreach tracking",
+    description:
+      "Track outreach activities, follow-up messages and response quality from LinkedIn prospecting.",
+    category: "marketing",
+    frequency: "weekly",
+    priority: "medium",
+    effort: "medium",
+    pattern: "declining",
+  },
+  {
+    title: "Customer follow-up emails",
+    description:
+      "Review customer follow-up emails, open replies and pending next actions for active accounts.",
+    category: "customer_success",
+    frequency: "weekly",
+    priority: "high",
+    effort: "high",
+    pattern: "workload_risk",
+  },
+  {
+    title: "Marketing campaign QA",
+    description:
+      "Check campaign links, email copy, tracking parameters, forms and CRM field mappings.",
+    category: "marketing",
+    frequency: "weekly",
+    priority: "medium",
+    effort: "medium",
+    pattern: "stable",
+  },
+  {
+    title: "Automation workflow check",
+    description:
+      "Check active automation flows, identify failed steps, broken triggers and missing notifications.",
+    category: "automation",
+    frequency: "weekly",
+    priority: "high",
+    effort: "high",
+    pattern: "workload_risk",
+  },
+  {
+    title: "Client report preparation",
+    description:
+      "Prepare weekly client performance updates with completed tasks, open risks and next-step recommendations.",
+    category: "customer_success",
+    frequency: "weekly",
+    priority: "high",
+    effort: "high",
+    pattern: "stable",
+  },
+  {
+    title: "Sales meeting preparation",
+    description:
+      "Prepare agenda, pipeline numbers, open blockers and next actions for weekly sales meetings.",
+    category: "operations",
+    frequency: "weekly",
+    priority: "medium",
+    effort: "medium",
+    pattern: "recent_recovery",
+  },
+  {
+    title: "CRM data quality review",
+    description:
+      "Review duplicate contacts, missing fields, outdated lifecycle stages and inconsistent deal records.",
+    category: "operations",
+    frequency: "weekly",
+    priority: "medium",
+    effort: "medium",
+    pattern: "abandoned",
+  },
+  {
+    title: "Lead scoring rule review",
+    description:
+      "Check lead scoring rules, scoring thresholds, source quality and handoff logic to sales.",
+    category: "automation",
+    frequency: "monthly",
+    priority: "medium",
+    effort: "high",
+    pattern: "low_activity",
+  },
+  {
+    title: "Email nurture performance review",
+    description:
+      "Review nurture sequence performance, email engagement, drop-off points and next optimization ideas.",
+    category: "marketing",
+    frequency: "weekly",
+    priority: "medium",
+    effort: "medium",
+    pattern: "declining",
+  },
+  {
+    title: "Customer onboarding checkpoint",
+    description:
+      "Check onboarding status, open customer questions, missing setup steps and first-value progress.",
+    category: "customer_success",
+    frequency: "weekly",
+    priority: "high",
+    effort: "medium",
+    pattern: "recent_recovery",
+  },
+  {
+    title: "Internal automation documentation",
+    description:
+      "Update internal documentation for CRM automations, ownership, trigger logic and failure handling.",
+    category: "automation",
+    frequency: "monthly",
+    priority: "low",
+    effort: "medium",
+    pattern: "abandoned",
+  },
+];
+
+const getDateDaysAgo = (daysAgo: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  date.setHours(10 + (daysAgo % 6), 15, 0, 0);
+  return date;
+};
+
+const getWorkloadScoreByPattern = (
+  pattern: WorkflowSeed["pattern"],
+  index: number,
+) => {
+  if (pattern === "workload_risk") {
+    return index % 3 === 0 ? 1 : 2;
+  }
+
+  if (pattern === "declining") {
+    return index % 3 === 0 ? 2 : 3;
+  }
+
+  if (pattern === "stable") {
+    return index % 5 === 0 ? 3 : 4;
+  }
+
+  if (pattern === "recent_recovery") {
+    return index % 4 === 0 ? 3 : 4;
+  }
+
+  if (pattern === "abandoned") {
+    return index % 2 === 0 ? 3 : 4;
+  }
+
+  return 3;
+};
+
+const getCompletionDaysByPattern = (pattern: WorkflowSeed["pattern"]) => {
+  switch (pattern) {
+    case "stable":
+      return [88, 82, 76, 70, 64, 58, 52, 46, 40, 34, 28, 22, 16, 10, 4];
+
+    case "declining":
+      return [88, 82, 76, 70, 64, 58, 52, 46, 40, 34, 27, 23, 19, 9];
+
+    case "abandoned":
+      return [89, 78, 67, 56, 45, 34, 31];
+
+    case "workload_risk":
+      return [
+        89, 84, 79, 74, 69, 64, 59, 54, 49, 44, 39, 34, 29, 24, 19, 14, 9, 4,
+      ];
+
+    case "recent_recovery":
+      return [88, 76, 64, 52, 40, 28, 18, 12, 8, 4, 2];
+
+    case "low_activity":
+      return [83, 61, 39, 17];
+
+    default:
+      return [];
+  }
+};
+
+const getCurrentStreak = (pattern: WorkflowSeed["pattern"]) => {
+  switch (pattern) {
+    case "stable":
+      return 6;
+    case "workload_risk":
+      return 5;
+    case "recent_recovery":
+      return 3;
+    case "declining":
+      return 1;
+    case "low_activity":
+      return 1;
+    case "abandoned":
+      return 0;
+    default:
+      return 0;
+  }
+};
+
+const seedDemoData = async () => {
   if (!process.env.MONGODB_URI) {
     throw new Error("MONGODB_URI is missing in .env.local");
   }
 
   await mongoose.connect(process.env.MONGODB_URI);
-};
 
-const getDateDaysAgo = (daysAgo: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  date.setHours(10, 0, 0, 0);
-  return date;
-};
+  console.log("Connected to MongoDB");
 
-const demoWorkflows = [
-  {
-    title: "CRM follow-up review",
-    description:
-      "Review open CRM follow-ups and make sure warm leads are not forgotten.",
-    category: "sales",
-    frequency: "daily",
-    priority: "high",
-    effort: "medium",
-  },
-  {
-    title: "New lead qualification",
-    description:
-      "Check new incoming leads and qualify them before they become cold.",
-    category: "sales",
-    frequency: "daily",
-    priority: "high",
-    effort: "medium",
-  },
-  {
-    title: "Stalled deal check",
-    description:
-      "Review deals without recent activity and identify next actions.",
-    category: "sales",
-    frequency: "weekly",
-    priority: "high",
-    effort: "high",
-  },
-  {
-    title: "Weekly pipeline update",
-    description: "Update pipeline stages and prepare a weekly sales overview.",
-    category: "sales",
-    frequency: "weekly",
-    priority: "high",
-    effort: "medium",
-  },
-  {
-    title: "LinkedIn outreach tracking",
-    description: "Track outbound LinkedIn activity and follow-up consistency.",
-    category: "marketing",
-    frequency: "daily",
-    priority: "medium",
-    effort: "medium",
-  },
-  {
-    title: "Customer follow-up emails",
-    description:
-      "Send follow-up emails to active customers and open opportunities.",
-    category: "customer_success",
-    frequency: "daily",
-    priority: "high",
-    effort: "high",
-  },
-  {
-    title: "Marketing campaign QA",
-    description: "Check active campaigns, landing pages and tracking links.",
-    category: "marketing",
-    frequency: "weekly",
-    priority: "medium",
-    effort: "medium",
-  },
-  {
-    title: "Automation workflow check",
-    description: "Review critical automations and check for broken workflows.",
-    category: "automation",
-    frequency: "weekly",
-    priority: "high",
-    effort: "high",
-  },
-  {
-    title: "Client report preparation",
-    description: "Prepare recurring client reports and summarize key results.",
-    category: "operations",
-    frequency: "weekly",
-    priority: "medium",
-    effort: "medium",
-  },
-  {
-    title: "Sales meeting preparation",
-    description: "Prepare agenda and CRM notes before weekly sales meetings.",
-    category: "operations",
-    frequency: "weekly",
-    priority: "medium",
-    effort: "low",
-  },
-] as const;
-
-const completionPatterns: Record<string, number[]> = {
-  // stable
-  "CRM follow-up review": [
-    1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 22, 23, 24, 25, 26, 29,
-    30, 31, 32, 33, 36, 37, 38, 39, 40,
-  ],
-  "Weekly pipeline update": [2, 9, 16, 23, 30, 37, 44],
-
-  // declining in last 14 days
-  "LinkedIn outreach tracking": [
-    1, 2, 3, 8, 9, 15, 16, 17, 22, 23, 24, 29, 30, 31, 36, 37, 38, 39, 40, 41,
-  ],
-  "Marketing campaign QA": [4, 18, 25, 32, 39, 46],
-
-  // abandoned
-  "Automation workflow check": [12, 19, 26, 33, 40],
-  "Stalled deal check": [10, 17, 24, 31, 38, 45],
-
-  // workload risk: active but low workload score recently
-  "Customer follow-up emails": [
-    1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 22, 23, 24, 25, 26, 29,
-    30, 31, 32, 33,
-  ],
-
-  // medium
-  "New lead qualification": [
-    1, 2, 4, 8, 9, 11, 15, 16, 18, 22, 23, 25, 29, 30, 32, 36, 37, 39,
-  ],
-  "Client report preparation": [3, 10, 17, 24, 31, 38, 45],
-  "Sales meeting preparation": [2, 9, 16, 23, 30, 37],
-};
-
-const getWorkloadScore = (workflowTitle: string, daysAgo: number) => {
-  if (workflowTitle === "Customer follow-up emails" && daysAgo <= 12) {
-    return 2;
-  }
-
-  if (workflowTitle === "Automation workflow check") {
-    return 3;
-  }
-
-  if (workflowTitle === "CRM follow-up review") {
-    return 4;
-  }
-
-  if (workflowTitle === "Weekly pipeline update") {
-    return 4;
-  }
-
-  if (daysAgo <= 14) {
-    return 3;
-  }
-
-  return 4;
-};
-
-const getProgressNote = (workflowTitle: string, daysAgo: number) => {
-  if (workflowTitle === "Customer follow-up emails" && daysAgo <= 12) {
-    return "High follow-up volume. Workload feels heavy this week.";
-  }
-
-  if (workflowTitle === "Automation workflow check") {
-    return "Automation review completed, but ownership should be clarified.";
-  }
-
-  if (workflowTitle === "Stalled deal check") {
-    return "Several deals require next-step clarification.";
-  }
-
-  if (workflowTitle === "LinkedIn outreach tracking" && daysAgo <= 14) {
-    return "Outreach activity is lower than expected.";
-  }
-
-  return "Workflow completed successfully.";
-};
-
-const calculateCurrentStreak = (daysAgoList: number[]) => {
-  let streak = 0;
-
-  for (let day = 1; day <= 45; day += 1) {
-    if (daysAgoList.includes(day)) {
-      streak += 1;
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-};
-
-const calculateBestStreak = (daysAgoList: number[]) => {
-  const sorted = [...daysAgoList].sort((a, b) => a - b);
-
-  let bestStreak = 0;
-  let currentStreak = 0;
-  let previousDay: number | null = null;
-
-  for (const day of sorted) {
-    if (previousDay === null || day === previousDay + 1) {
-      currentStreak += 1;
-    } else {
-      currentStreak = 1;
-    }
-
-    bestStreak = Math.max(bestStreak, currentStreak);
-    previousDay = day;
-  }
-
-  return bestStreak;
-};
-
-const seedDemoData = async () => {
-  await connectDb();
-
-  const existingDemoUser = await User.findOne({ email: DEMO_USER.email });
+  const existingDemoUser = await User.findOne({
+    email: DEMO_USER.email,
+  });
 
   if (existingDemoUser) {
-    await Progress.deleteMany({ userId: existingDemoUser._id });
-    await Workflow.deleteMany({ userId: existingDemoUser._id });
-    await User.deleteOne({ _id: existingDemoUser._id });
+    await Progress.deleteMany({
+      userId: existingDemoUser._id,
+    });
+
+    await Workflow.deleteMany({
+      userId: existingDemoUser._id,
+    });
+
+    await User.deleteOne({
+      _id: existingDemoUser._id,
+    });
   }
+
+  console.log("Old demo user data cleared");
 
   const hashedPassword = await bcrypt.hash(DEMO_USER.password, 10);
 
@@ -241,35 +300,53 @@ const seedDemoData = async () => {
     password: hashedPassword,
   });
 
-  for (const workflowData of demoWorkflows) {
-    const daysAgoList = completionPatterns[workflowData.title] || [];
+  console.log("Demo user created");
+
+  let totalProgressRecords = 0;
+
+  for (const workflowSeed of demoWorkflows) {
+    const completionDays = getCompletionDaysByPattern(workflowSeed.pattern);
 
     const workflow = await Workflow.create({
-      ...workflowData,
       userId: demoUser._id,
-      currentStreak: calculateCurrentStreak(daysAgoList),
-      bestStreak: calculateBestStreak(daysAgoList),
-      totalCompletions: daysAgoList.length,
+      title: workflowSeed.title,
+      description: workflowSeed.description,
+      category: workflowSeed.category,
+      frequency: workflowSeed.frequency,
+      priority: workflowSeed.priority,
+      effort: workflowSeed.effort,
+      currentStreak: getCurrentStreak(workflowSeed.pattern),
+      bestStreak: Math.max(
+        getCurrentStreak(workflowSeed.pattern),
+        completionDays.length,
+      ),
+      totalCompletions: completionDays.length,
       isActive: true,
     });
 
-    const progressRecords = daysAgoList.map((daysAgo) => ({
+    const progressRecords = completionDays.map((daysAgo, index) => ({
       userId: demoUser._id,
       workflowId: workflow._id,
       completedAt: getDateDaysAgo(daysAgo),
-      workloadScore: getWorkloadScore(workflow.title, daysAgo),
-      notes: getProgressNote(workflow.title, daysAgo),
+      workloadScore: getWorkloadScoreByPattern(workflowSeed.pattern, index),
+      notes: `Demo activity record for ${workflowSeed.title}`,
     }));
 
     await Progress.insertMany(progressRecords);
+
+    totalProgressRecords += progressRecords.length;
   }
 
-  console.log("Demo data created successfully.");
-  console.log(`Demo email: ${DEMO_USER.email}`);
-  console.log(`Demo password: ${DEMO_USER.password}`);
-  console.log(`Workflows created: ${demoWorkflows.length}`);
+  console.log(`Created workflows: ${demoWorkflows.length}`);
+  console.log(`Created progress records: ${totalProgressRecords}`);
+  console.log("");
+  console.log("Demo login:");
+  console.log(`Email: ${DEMO_USER.email}`);
+  console.log(`Password: ${DEMO_USER.password}`);
 
   await mongoose.disconnect();
+
+  console.log("MongoDB disconnected");
 };
 
 seedDemoData().catch(async (error) => {
