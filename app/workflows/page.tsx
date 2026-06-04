@@ -15,7 +15,12 @@ import {
   Typography,
   message,
 } from "antd";
-import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  ApiOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 
 import AppHeader from "@/components/AppHeader";
@@ -32,6 +37,9 @@ type WorkflowCategory =
 type WorkflowFrequency = "daily" | "weekly" | "monthly";
 type WorkflowPriority = "low" | "medium" | "high";
 type WorkflowEffort = "low" | "medium" | "high";
+
+type CrmProvider = "hubspot" | "zoho" | "pipedrive";
+type ImportType = "sales" | "operations" | "automation" | "full";
 
 type Workflow = {
   _id: string;
@@ -53,6 +61,12 @@ type WorkflowFormValues = {
   frequency: WorkflowFrequency;
   priority: WorkflowPriority;
   effort: WorkflowEffort;
+};
+
+type CrmImportFormValues = {
+  provider: CrmProvider;
+  accessToken: string;
+  importType: ImportType;
 };
 
 const categoryOptions = [
@@ -81,13 +95,26 @@ const effortOptions = [
   { value: "high", label: "High" },
 ];
 
-const priorityColorMap = {
+const providerOptions = [
+  { value: "hubspot", label: "HubSpot" },
+  { value: "zoho", label: "Zoho CRM" },
+  { value: "pipedrive", label: "Pipedrive" },
+];
+
+const importTypeOptions = [
+  { value: "sales", label: "Sales workflows" },
+  { value: "operations", label: "Operations workflows" },
+  { value: "automation", label: "Automation workflows" },
+  { value: "full", label: "Full CRM workflow set" },
+];
+
+const priorityColorMap: Record<WorkflowPriority, string> = {
   low: "green",
   medium: "orange",
   high: "red",
 };
 
-const effortColorMap = {
+const effortColorMap: Record<WorkflowEffort, string> = {
   low: "green",
   medium: "blue",
   high: "volcano",
@@ -106,7 +133,9 @@ const descriptionClampStyle = {
 
 export default function WorkflowsPage() {
   const router = useRouter();
-  const [form] = Form.useForm<WorkflowFormValues>();
+
+  const [workflowForm] = Form.useForm<WorkflowFormValues>();
+  const [crmForm] = Form.useForm<CrmImportFormValues>();
 
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -115,6 +144,9 @@ export default function WorkflowsPage() {
   const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
   const [isSavingWorkflow, setIsSavingWorkflow] = useState(false);
+
+  const [isCrmModalOpen, setIsCrmModalOpen] = useState(false);
+  const [isImportingCrm, setIsImportingCrm] = useState(false);
 
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(
     null,
@@ -164,7 +196,7 @@ export default function WorkflowsPage() {
   const openCreateModal = () => {
     setEditingWorkflow(null);
 
-    form.setFieldsValue({
+    workflowForm.setFieldsValue({
       title: "",
       description: "",
       category: "sales",
@@ -179,7 +211,7 @@ export default function WorkflowsPage() {
   const openEditModal = (workflow: Workflow) => {
     setEditingWorkflow(workflow);
 
-    form.setFieldsValue({
+    workflowForm.setFieldsValue({
       title: workflow.title,
       description: workflow.description,
       category: workflow.category,
@@ -191,9 +223,19 @@ export default function WorkflowsPage() {
     setIsWorkflowModalOpen(true);
   };
 
+  const openCrmImportModal = () => {
+    crmForm.setFieldsValue({
+      provider: "hubspot",
+      accessToken: "",
+      importType: "full",
+    });
+
+    setIsCrmModalOpen(true);
+  };
+
   const handleSaveWorkflow = async () => {
     try {
-      const values = await form.validateFields();
+      const values = await workflowForm.validateFields();
 
       setIsSavingWorkflow(true);
 
@@ -225,7 +267,7 @@ export default function WorkflowsPage() {
 
       setIsWorkflowModalOpen(false);
       setEditingWorkflow(null);
-      form.resetFields();
+      workflowForm.resetFields();
 
       await loadWorkflows();
     } catch (error) {
@@ -234,6 +276,48 @@ export default function WorkflowsPage() {
       }
     } finally {
       setIsSavingWorkflow(false);
+    }
+  };
+
+  const handleCrmImport = async () => {
+    try {
+      const values = await crmForm.validateFields();
+
+      setIsImportingCrm(true);
+
+      const response = await fetch("/api/crm/import-workflows", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
+      });
+
+      if (response.status === 401) {
+        router.push("/login");
+        return;
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to import CRM workflows");
+      }
+
+      message.success(
+        `${result.data.importedCount} CRM workflows imported successfully`,
+      );
+
+      setIsCrmModalOpen(false);
+      crmForm.resetFields();
+
+      await loadWorkflows();
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message);
+      }
+    } finally {
+      setIsImportingCrm(false);
     }
   };
 
@@ -333,12 +417,24 @@ export default function WorkflowsPage() {
               }}
             >
               Create, edit, delete and track recurring sales, marketing,
-              operations and automation workflows.
+              operations and automation workflows. CRM import demonstrates how
+              external CRM activity can become operational analytics input.
             </Paragraph>
           </div>
 
-          <div style={{ display: "flex", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+            }}
+          >
             <Button onClick={loadWorkflows}>Refresh</Button>
+
+            <Button icon={<ApiOutlined />} onClick={openCrmImportModal}>
+              Connect CRM
+            </Button>
 
             <Button
               type="primary"
@@ -382,18 +478,35 @@ export default function WorkflowsPage() {
             <Title level={3}>No workflows yet</Title>
 
             <Paragraph style={{ color: "var(--text-muted)", fontSize: 16 }}>
-              Create your first workflow to start tracking recurring business
-              activity.
+              Create your first workflow manually or connect a CRM to import
+              workflow templates from a CRM-style process.
             </Paragraph>
 
-            <Button
-              type="primary"
-              size="large"
-              icon={<PlusOutlined />}
-              onClick={openCreateModal}
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                justifyContent: "center",
+                flexWrap: "wrap",
+              }}
             >
-              Create first workflow
-            </Button>
+              <Button
+                size="large"
+                icon={<ApiOutlined />}
+                onClick={openCrmImportModal}
+              >
+                Connect CRM
+              </Button>
+
+              <Button
+                type="primary"
+                size="large"
+                icon={<PlusOutlined />}
+                onClick={openCreateModal}
+              >
+                Create first workflow
+              </Button>
+            </div>
           </Card>
         ) : (
           <div className="grid grid-3">
@@ -505,13 +618,13 @@ export default function WorkflowsPage() {
           onCancel={() => {
             setIsWorkflowModalOpen(false);
             setEditingWorkflow(null);
-            form.resetFields();
+            workflowForm.resetFields();
           }}
           onOk={handleSaveWorkflow}
           okText={editingWorkflow ? "Save changes" : "Create workflow"}
           confirmLoading={isSavingWorkflow}
         >
-          <Form form={form} layout="vertical">
+          <Form form={workflowForm} layout="vertical">
             <Form.Item
               label="Title"
               name="title"
@@ -583,6 +696,72 @@ export default function WorkflowsPage() {
               ]}
             >
               <Select options={effortOptions} />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          title="Import workflows from CRM"
+          open={isCrmModalOpen}
+          onCancel={() => {
+            setIsCrmModalOpen(false);
+            crmForm.resetFields();
+          }}
+          onOk={handleCrmImport}
+          okText="Connect and import"
+          confirmLoading={isImportingCrm}
+        >
+          <Alert
+            type="info"
+            showIcon
+            title="Secure CRM connection"
+            description="Connect a CRM provider to import recurring sales, operations and automation workflows. The access token is used only for this import request and is not stored."
+            style={{ marginBottom: 18 }}
+          />
+
+          <Form form={crmForm} layout="vertical">
+            <Form.Item
+              label="CRM provider"
+              name="provider"
+              rules={[
+                {
+                  required: true,
+                  message: "CRM provider is required",
+                },
+              ]}
+            >
+              <Select options={providerOptions} />
+            </Form.Item>
+
+            <Form.Item
+              label="API key / access token"
+              name="accessToken"
+              rules={[
+                {
+                  required: true,
+                  message: "API key or access token is required",
+                },
+                {
+                  min: 8,
+                  message: "Token must be at least 8 characters",
+                },
+              ]}
+              extra="For security, the token is processed only during this request and is not saved in MongoDB, cookies or localStorage."
+            >
+              <Input.Password size="large" />
+            </Form.Item>
+
+            <Form.Item
+              label="Import type"
+              name="importType"
+              rules={[
+                {
+                  required: true,
+                  message: "Import type is required",
+                },
+              ]}
+            >
+              <Select options={importTypeOptions} />
             </Form.Item>
           </Form>
         </Modal>
