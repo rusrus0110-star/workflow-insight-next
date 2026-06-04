@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import AppHeader from "@/components/AppHeader";
 import AiInsightPanel from "@/components/AiInsightPanel";
+import DashboardCharts from "@/components/DashboardCharts";
 import MetricCard from "@/components/MetricCard";
 
 const { Title, Paragraph } = Typography;
@@ -250,6 +251,8 @@ export default function DashboardPage() {
                   : "No workflow data available yet."}
               </Paragraph>
             </div>
+
+            <DashboardCharts />
 
             <AiInsightPanel
               insight={insight}
