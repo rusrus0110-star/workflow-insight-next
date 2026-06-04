@@ -1,3 +1,5 @@
+import OpenAI from "openai";
+
 import {
   getAbandonedWorkflows,
   getAtRiskWorkflows,
@@ -5,72 +7,156 @@ import {
   getWorkloadRiskWorkflows,
 } from "@/services/stats_service";
 
-export const generateWeeklyInsight = async (userId: string) => {
+export type InsightPeriod = "weekly" | "monthly" | "quarterly";
+
+type AiRisk = {
+  title: string;
+  severity: "low" | "medium" | "high";
+  reason: string;
+};
+
+export type AiInsight = {
+  generatedAt: string;
+  modelLabel: string;
+  period: InsightPeriod;
+  periodLabel: string;
+  overallRiskLevel: "low" | "medium" | "high";
+  confidenceScore: number;
+  summary: string;
+  keyFindings: string[];
+  risks: AiRisk[];
+  recommendations: string[];
+  nextPeriodPriorities: string[];
+};
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+
+const periodLabelMap: Record<InsightPeriod, string> = {
+  weekly: "Weekly",
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+};
+
+const parseAiJson = (text: string): AiInsight => {
+  try {
+    return JSON.parse(text) as AiInsight;
+  } catch {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error("AI response did not contain valid JSON");
+    }
+
+    return JSON.parse(jsonMatch[0]) as AiInsight;
+  }
+};
+
+export const generateAiInsight = async (
+  userId: string,
+  period: InsightPeriod,
+) => {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is missing");
+  }
+
   const dashboardStats = await getDashboardStats(userId);
   const abandonedWorkflows = await getAbandonedWorkflows(userId);
   const atRiskWorkflows = await getAtRiskWorkflows(userId);
   const workloadRiskWorkflows = await getWorkloadRiskWorkflows(userId);
 
-  const topAbandoned = abandonedWorkflows
-    .slice(0, 2)
-    .map((item) => item.workflow.title);
-  const topAtRisk = atRiskWorkflows
-    .slice(0, 2)
-    .map((item) => item.workflow.title);
-  const topWorkloadRisk = workloadRiskWorkflows
-    .slice(0, 2)
-    .map((item) => item.workflow.title);
+  const aiInput = {
+    period,
+    periodLabel: periodLabelMap[period],
+    dashboardStats,
+    abandonedWorkflows: abandonedWorkflows.map((item) => ({
+      title: item.workflow.title,
+      category: item.workflow.category,
+      priority: item.workflow.priority,
+      effort: item.workflow.effort,
+      reason: item.reason,
+      lastCompletedAt: item.lastCompletedAt,
+    })),
+    atRiskWorkflows: atRiskWorkflows.map((item) => ({
+      title: item.workflow.title,
+      category: item.workflow.category,
+      priority: item.workflow.priority,
+      effort: item.workflow.effort,
+      recentCount: item.recentCount,
+      previousCount: item.previousCount,
+      declinePercent: item.declinePercent,
+      reason: item.reason,
+    })),
+    workloadRiskWorkflows: workloadRiskWorkflows.map((item) => ({
+      title: item.workflow.title,
+      category: item.workflow.category,
+      priority: item.workflow.priority,
+      effort: item.workflow.effort,
+      completions: item.completions,
+      averageWorkloadScore: item.averageWorkloadScore,
+      reason: item.reason,
+    })),
+  };
+
+  const response = await openai.responses.create({
+    model,
+    instructions: `
+You are an AI business operations analyst.
+
+Analyze workflow data for a CRM-style operational dashboard.
+The product tracks recurring sales, marketing, operations, customer success and automation workflows.
+
+Return ONLY valid JSON.
+Do not use markdown.
+Do not add explanations outside JSON.
+
+The JSON must match this exact shape:
+{
+  "generatedAt": "ISO string",
+  "modelLabel": "string",
+  "period": "weekly | monthly | quarterly",
+  "periodLabel": "string",
+  "overallRiskLevel": "low | medium | high",
+  "confidenceScore": number,
+  "summary": "string",
+  "keyFindings": ["string"],
+  "risks": [
+    {
+      "title": "string",
+      "severity": "low | medium | high",
+      "reason": "string"
+    }
+  ],
+  "recommendations": ["string"],
+  "nextPeriodPriorities": ["string"]
+}
+
+Rules:
+- Make the answer specific to the provided data.
+- Mention workflow names where useful.
+- If there is little data, say that confidence is limited.
+- Do not invent data that is not present.
+- Keep it business-oriented, not academic.
+- Make it sound like a real operational review.
+`,
+    input: JSON.stringify(aiInput),
+    max_output_tokens: 1200,
+  });
+
+  const parsed = parseAiJson(response.output_text);
 
   return {
-    summary:
-      "This week, the team shows stable execution in several sales routines, but there are clear operational risks in follow-up consistency, stalled workflow checks and workload pressure.",
-
-    keyFindings: [
-      `${dashboardStats.totalWorkflows} active workflows are currently tracked across sales, marketing, operations, customer success and automation.`,
-      `${dashboardStats.abandonedCount} workflows show no recent activity and may need management attention.`,
-      `${dashboardStats.atRiskCount} workflows declined compared to the previous period.`,
-      `${dashboardStats.workloadRiskCount} workflows show possible workload pressure based on recent low workload scores.`,
-    ],
-
-    risks: [
-      {
-        title: "Follow-up consistency risk",
-        severity: "high",
-        reason:
-          topAtRisk.length > 0
-            ? `${topAtRisk.join(", ")} declined compared to the previous period. This may increase the risk of losing warm leads or delaying deal progression.`
-            : "No major follow-up decline detected in the current demo data.",
-      },
-      {
-        title: "Abandoned workflow risk",
-        severity: "medium",
-        reason:
-          topAbandoned.length > 0
-            ? `${topAbandoned.join(", ")} have not been completed recently. These routines may need ownership clarification.`
-            : "No abandoned workflows detected.",
-      },
-      {
-        title: "Workload pressure risk",
-        severity: "medium",
-        reason:
-          topWorkloadRisk.length > 0
-            ? `${topWorkloadRisk.join(", ")} show high activity combined with low workload scores. This may indicate overload or process fatigue.`
-            : "No significant workload pressure detected.",
-      },
-    ],
-
-    recommendations: [
-      "Review stalled sales workflows and define the next action for each open opportunity.",
-      "Assign clear ownership for workflows that have not been completed recently.",
-      "Prioritize follow-ups for high-value leads before adding new outreach activity.",
-      "Monitor customer follow-up workload to prevent overload and quality decline.",
-    ],
-
-    nextWeekPriorities: [
-      "Run a stalled deal review.",
-      "Check abandoned automation workflows.",
-      "Reduce workload on high-effort customer follow-up routines.",
-      "Keep CRM follow-up review as a stable recurring process.",
-    ],
+    ...parsed,
+    generatedAt: parsed.generatedAt || new Date().toISOString(),
+    modelLabel: `${model} via OpenAI API`,
+    period,
+    periodLabel: periodLabelMap[period],
   };
+};
+
+export const generateWeeklyInsight = async (userId: string) => {
+  return generateAiInsight(userId, "weekly");
 };

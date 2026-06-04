@@ -1,3 +1,5 @@
+import mongoose from "mongoose";
+
 import { connectDb } from "@/lib/db";
 import Progress from "@/models/Progress";
 import Workflow from "@/models/Workflow";
@@ -11,6 +13,8 @@ const getDateDaysAgo = (days: number) => {
 
 export const getDashboardStats = async (userId: string) => {
   await connectDb();
+
+  const userObjectId = new mongoose.Types.ObjectId(userId);
 
   const workflows = await Workflow.find({
     userId,
@@ -26,7 +30,7 @@ export const getDashboardStats = async (userId: string) => {
   const workloadResult = await Progress.aggregate([
     {
       $match: {
-        userId: workflows[0]?.userId,
+        userId: userObjectId,
       },
     },
     {
