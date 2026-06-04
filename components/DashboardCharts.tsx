@@ -7,17 +7,17 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Line,
   LineChart,
   Pie,
   PieChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
-const { Title, Paragraph, Text } = Typography;
+const { Title, Paragraph } = Typography;
 
 type ActivityTrendItem = {
   date: string;
@@ -47,6 +47,15 @@ type ChartsData = {
   workloadDistribution: WorkloadDistributionItem[];
 };
 
+type ApiResponse = {
+  success: boolean;
+  message: string;
+  data: ChartsData;
+};
+
+const CHART_WIDTH = 520;
+const CHART_HEIGHT = 300;
+
 const chartColors = [
   "#2563eb",
   "#16a34a",
@@ -56,14 +65,25 @@ const chartColors = [
   "#0891b2",
 ];
 
-const hasAnyValue = <T extends { count?: number; completions?: number }>(
-  data: T[],
-) => {
-  return data.some((item) => (item.count || item.completions || 0) > 0);
+const chartWrapperStyle = {
+  width: "100%",
+  overflowX: "auto",
+  overflowY: "hidden",
+  paddingBottom: 4,
+} as const;
+
+const hasCountValue = <T extends { count: number }>(data: T[]) => {
+  return data.some((item) => item.count > 0);
+};
+
+const hasActivityValue = (data: ActivityTrendItem[]) => {
+  return data.some(
+    (item) => item.completions > 0 || item.averageWorkloadScore > 0,
+  );
 };
 
 export default function DashboardCharts() {
-  const [charts, setCharts] = useState<ChartsData | null>(null);
+  const [chartsData, setChartsData] = useState<ChartsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -72,17 +92,20 @@ export default function DashboardCharts() {
       setIsLoading(true);
       setErrorMessage("");
 
-      const response = await fetch("/api/stats/charts");
-      const result = await response.json();
+      const response = await fetch("/api/stats/charts", {
+        cache: "no-store",
+      });
+
+      const result: ApiResponse = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Failed to load charts");
+        throw new Error(result.message || "Failed to load dashboard charts");
       }
 
-      setCharts(result.data);
+      setChartsData(result.data);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Something went wrong",
+        error instanceof Error ? error.message : "Failed to load charts",
       );
     } finally {
       setIsLoading(false);
@@ -104,7 +127,7 @@ export default function DashboardCharts() {
       <Card className="card" style={{ borderRadius: 18, marginBottom: 24 }}>
         <div
           style={{
-            minHeight: 240,
+            minHeight: 280,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -118,188 +141,186 @@ export default function DashboardCharts() {
 
   if (errorMessage) {
     return (
-      <Alert type="error" message={errorMessage} style={{ marginBottom: 24 }} />
+      <Alert
+        type="error"
+        title={errorMessage}
+        showIcon
+        style={{ marginBottom: 24 }}
+      />
     );
   }
 
-  if (!charts) {
+  if (!chartsData) {
     return null;
   }
 
   return (
-    <div style={{ marginBottom: 24 }}>
+    <section style={{ marginBottom: 24 }}>
       <div style={{ marginBottom: 18 }}>
         <Title level={3} style={{ marginBottom: 6 }}>
-          Visual workflow analytics
+          Workflow Analytics Charts
         </Title>
 
         <Paragraph style={{ color: "var(--text-muted)", marginBottom: 0 }}>
-          Charts make workflow activity, risk signals and workload distribution
-          easier to review at a glance.
+          Visual overview of workflow activity, risk distribution, categories
+          and workload signals.
         </Paragraph>
       </div>
 
       <div className="grid grid-2">
-        <Card className="card" style={{ borderRadius: 18 }}>
-          <Text
-            style={{
-              color: "var(--primary)",
-              fontWeight: 700,
-              textTransform: "uppercase",
-            }}
-          >
-            Activity trend
-          </Text>
-
-          <Title level={4} style={{ marginTop: 10 }}>
-            Last 30 days
+        <Card className="card" style={{ borderRadius: 18, overflow: "hidden" }}>
+          <Title level={4} style={{ marginTop: 0 }}>
+            Activity trend — last 30 days
           </Title>
 
-          {hasAnyValue(charts.activityTrend) ? (
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={charts.activityTrend}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="completions"
-                    stroke="#2563eb"
-                    strokeWidth={3}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+          {hasActivityValue(chartsData.activityTrend) ? (
+            <div style={chartWrapperStyle}>
+              <LineChart
+                width={CHART_WIDTH}
+                height={CHART_HEIGHT}
+                data={chartsData.activityTrend}
+                margin={{
+                  top: 16,
+                  right: 20,
+                  left: -8,
+                  bottom: 8,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={4} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="completions"
+                  name="Completions"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="averageWorkloadScore"
+                  name="Avg workload score"
+                  stroke="#16a34a"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
             </div>
           ) : (
             <Empty description="No activity data yet" />
           )}
         </Card>
 
-        <Card className="card" style={{ borderRadius: 18 }}>
-          <Text
-            style={{
-              color: "var(--primary)",
-              fontWeight: 700,
-              textTransform: "uppercase",
-            }}
-          >
+        <Card className="card" style={{ borderRadius: 18, overflow: "hidden" }}>
+          <Title level={4} style={{ marginTop: 0 }}>
             Risk overview
-          </Text>
-
-          <Title level={4} style={{ marginTop: 10 }}>
-            Workflow risk signals
           </Title>
 
-          {hasAnyValue(charts.riskOverview) ? (
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={charts.riskOverview}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                    {charts.riskOverview.map((_, index) => (
-                      <Cell
-                        key={`risk-${index}`}
-                        fill={chartColors[index % chartColors.length]}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+          {hasCountValue(chartsData.riskOverview) ? (
+            <div style={chartWrapperStyle}>
+              <BarChart
+                width={CHART_WIDTH}
+                height={CHART_HEIGHT}
+                data={chartsData.riskOverview}
+                margin={{
+                  top: 16,
+                  right: 20,
+                  left: -8,
+                  bottom: 8,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="count" name="Workflows">
+                  {chartsData.riskOverview.map((_, index) => (
+                    <Cell
+                      key={`risk-${index}`}
+                      fill={chartColors[index % chartColors.length]}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
             </div>
           ) : (
             <Empty description="No risk data yet" />
           )}
         </Card>
 
-        <Card className="card" style={{ borderRadius: 18 }}>
-          <Text
-            style={{
-              color: "var(--primary)",
-              fontWeight: 700,
-              textTransform: "uppercase",
-            }}
-          >
+        <Card className="card" style={{ borderRadius: 18, overflow: "hidden" }}>
+          <Title level={4} style={{ marginTop: 0 }}>
             Workflow categories
-          </Text>
-
-          <Title level={4} style={{ marginTop: 10 }}>
-            Category distribution
           </Title>
 
-          {hasAnyValue(charts.categoryDistribution) ? (
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={charts.categoryDistribution}
-                    dataKey="count"
-                    nameKey="category"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={4}
-                    label
-                  >
-                    {charts.categoryDistribution.map((_, index) => (
-                      <Cell
-                        key={`category-${index}`}
-                        fill={chartColors[index % chartColors.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+          {hasCountValue(chartsData.categoryDistribution) ? (
+            <div style={chartWrapperStyle}>
+              <PieChart width={CHART_WIDTH} height={CHART_HEIGHT}>
+                <Tooltip />
+                <Legend />
+                <Pie
+                  data={chartsData.categoryDistribution}
+                  dataKey="count"
+                  nameKey="category"
+                  cx="50%"
+                  cy="45%"
+                  outerRadius={90}
+                  label
+                >
+                  {chartsData.categoryDistribution.map((_, index) => (
+                    <Cell
+                      key={`category-${index}`}
+                      fill={chartColors[index % chartColors.length]}
+                    />
+                  ))}
+                </Pie>
+              </PieChart>
             </div>
           ) : (
-            <Empty description="No workflow categories yet" />
+            <Empty description="No category data yet" />
           )}
         </Card>
 
-        <Card className="card" style={{ borderRadius: 18 }}>
-          <Text
-            style={{
-              color: "var(--primary)",
-              fontWeight: 700,
-              textTransform: "uppercase",
-            }}
-          >
-            Workload scores
-          </Text>
-
-          <Title level={4} style={{ marginTop: 10 }}>
-            Score distribution
+        <Card className="card" style={{ borderRadius: 18, overflow: "hidden" }}>
+          <Title level={4} style={{ marginTop: 0 }}>
+            Workload score distribution
           </Title>
 
-          {hasAnyValue(charts.workloadDistribution) ? (
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={charts.workloadDistribution}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="score" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                    {charts.workloadDistribution.map((_, index) => (
-                      <Cell
-                        key={`workload-${index}`}
-                        fill={chartColors[index % chartColors.length]}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+          {hasCountValue(chartsData.workloadDistribution) ? (
+            <div style={chartWrapperStyle}>
+              <BarChart
+                width={CHART_WIDTH}
+                height={CHART_HEIGHT}
+                data={chartsData.workloadDistribution}
+                margin={{
+                  top: 16,
+                  right: 20,
+                  left: -8,
+                  bottom: 8,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="score" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="count" name="Activity records">
+                  {chartsData.workloadDistribution.map((_, index) => (
+                    <Cell
+                      key={`workload-${index}`}
+                      fill={chartColors[index % chartColors.length]}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
             </div>
           ) : (
-            <Empty description="No workload scores yet" />
+            <Empty description="No workload data yet" />
           )}
         </Card>
       </div>
-    </div>
+    </section>
   );
 }

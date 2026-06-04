@@ -1,21 +1,23 @@
 "use client";
 
+import { useState } from "react";
+import { Button } from "antd";
+import { CloseOutlined, LogoutOutlined, MenuOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Button, Space } from "antd";
 
-const navItems = [
+const navLinks = [
   {
-    label: "Dashboard",
     href: "/dashboard",
+    label: "Dashboard",
   },
   {
-    label: "Workflows",
     href: "/workflows",
+    label: "Workflows",
   },
   {
-    label: "Analytics",
     href: "/analytics",
+    label: "Analytics",
   },
 ];
 
@@ -23,66 +25,66 @@ export default function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", {
-      method: "POST",
-    });
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-    router.push("/login");
+  const closeMenu = () => {
+    setIsMenuOpen(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+
+      closeMenu();
+      router.push("/login");
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
-    <header
-      style={{
-        padding: "20px 0",
-        borderBottom: "1px solid var(--border)",
-        background: "rgba(255, 255, 255, 0.82)",
-        backdropFilter: "blur(14px)",
-        position: "sticky",
-        top: 0,
-        zIndex: 20,
-      }}
-    >
-      <div
-        className="page-container"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 24,
-        }}
-      >
-        <Link
-          href="/dashboard"
-          style={{
-            fontSize: 22,
-            fontWeight: 800,
-            color: "var(--primary)",
-          }}
-        >
-          Workflow Insight
-        </Link>
+    <header className="app-header">
+      <div className="app-header-inner">
+        <div className="app-header-top">
+          <Link href="/dashboard" className="app-logo" onClick={closeMenu}>
+            Workflow Insight
+          </Link>
 
-        <Space size="middle">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
+          <button
+            type="button"
+            className="burger-button"
+            onClick={() => setIsMenuOpen((current) => !current)}
+            aria-label="Toggle navigation menu"
+          >
+            {isMenuOpen ? <CloseOutlined /> : <MenuOutlined />}
+          </button>
+        </div>
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                style={{
-                  fontWeight: 600,
-                  color: isActive ? "var(--primary)" : "var(--text-muted)",
-                }}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className={`app-nav ${isMenuOpen ? "app-nav-open" : ""}`}>
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={closeMenu}
+              className={pathname === link.href ? "active" : ""}
+            >
+              {link.label}
+            </Link>
+          ))}
 
-          <Button onClick={handleLogout}>Logout</Button>
-        </Space>
+          <Button
+            icon={<LogoutOutlined />}
+            loading={isLoggingOut}
+            onClick={handleLogout}
+          >
+            Logout
+          </Button>
+        </nav>
       </div>
     </header>
   );
