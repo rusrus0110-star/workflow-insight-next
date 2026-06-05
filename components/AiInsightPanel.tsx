@@ -1,3 +1,5 @@
+"use client";
+
 import { Alert, Button, Card, Progress, Tag, Typography } from "antd";
 
 const { Title, Paragraph, Text } = Typography;
@@ -31,18 +33,29 @@ type AiInsightPanelProps = {
   onPeriodChange: (period: InsightPeriod) => void;
 };
 
-const severityColorMap = {
+const riskColorMap = {
   low: "green",
   medium: "orange",
   high: "red",
-};
+} as const;
 
-const listStyle = {
-  margin: 0,
-  paddingLeft: 20,
-  color: "var(--text-muted)",
-  lineHeight: 1.7,
-};
+const periodButtons: {
+  label: string;
+  value: InsightPeriod;
+}[] = [
+  {
+    label: "Weekly analysis",
+    value: "weekly",
+  },
+  {
+    label: "Monthly analysis",
+    value: "monthly",
+  },
+  {
+    label: "Quarterly analysis",
+    value: "quarterly",
+  },
+];
 
 export default function AiInsightPanel({
   insight,
@@ -50,223 +63,221 @@ export default function AiInsightPanel({
   isLoading,
   onPeriodChange,
 }: AiInsightPanelProps) {
-  if (!insight) {
-    return (
-      <Card className="card" style={{ borderRadius: 18 }}>
-        <Alert
-          type="info"
-          message="AI insight is not available yet."
-          showIcon
-        />
-      </Card>
-    );
-  }
-
   return (
     <Card className="card" style={{ borderRadius: 18 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 16,
-          alignItems: "flex-start",
-          marginBottom: 20,
-        }}
-      >
-        <div>
-          <Text
-            style={{
-              color: "var(--primary)",
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: 0.8,
-            }}
-          >
-            OpenAI Business Analysis
-          </Text>
-
-          <Title level={3} style={{ marginTop: 12, marginBottom: 8 }}>
-            {insight.periodLabel} workflow diagnosis
-          </Title>
-
-          <Text type="secondary">{insight.modelLabel}</Text>
-        </div>
-
-        <Tag color={severityColorMap[insight.overallRiskLevel]}>
-          {insight.overallRiskLevel.toUpperCase()} RISK
-        </Tag>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
-        <Button
-          type={selectedPeriod === "weekly" ? "primary" : "default"}
-          loading={isLoading && selectedPeriod === "weekly"}
-          onClick={() => onPeriodChange("weekly")}
-        >
-          Weekly analysis
-        </Button>
-
-        <Button
-          type={selectedPeriod === "monthly" ? "primary" : "default"}
-          loading={isLoading && selectedPeriod === "monthly"}
-          onClick={() => onPeriodChange("monthly")}
-        >
-          Monthly analysis
-        </Button>
-
-        <Button
-          type={selectedPeriod === "quarterly" ? "primary" : "default"}
-          loading={isLoading && selectedPeriod === "quarterly"}
-          onClick={() => onPeriodChange("quarterly")}
-        >
-          Quarterly analysis
-        </Button>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.3fr 0.7fr",
-          gap: 24,
-          marginBottom: 28,
-        }}
-      >
-        <div
+      <div style={{ marginBottom: 20 }}>
+        <Text
           style={{
-            border: "1px solid var(--border)",
-            borderRadius: 16,
-            padding: 18,
-            background: "#fff",
+            color: "var(--primary)",
+            fontWeight: 700,
+            letterSpacing: 1.2,
+            textTransform: "uppercase",
           }}
         >
-          <Text strong>AI summary</Text>
+          OpenAI Business Analysis
+        </Text>
 
-          <Paragraph
-            style={{
-              marginTop: 10,
-              marginBottom: 0,
-              fontSize: 16,
-              lineHeight: 1.7,
-              color: "var(--text-muted)",
-            }}
-          >
-            {insight.summary}
-          </Paragraph>
-        </div>
+        <Title level={3} style={{ marginTop: 8, marginBottom: 8 }}>
+          {insight?.periodLabel || "Workflow diagnosis"}
+        </Title>
+
+        <Paragraph style={{ color: "var(--text-muted)", marginBottom: 16 }}>
+          Generate an AI-powered operational analysis based on workflow
+          completions, abandoned routines, activity decline and workload scores.
+        </Paragraph>
 
         <div
           style={{
-            border: "1px solid var(--border)",
-            borderRadius: 16,
-            padding: 18,
-            background: "#fff",
+            display: "flex",
+            gap: 12,
+            flexWrap: "wrap",
           }}
         >
-          <Text strong>Confidence score</Text>
+          {periodButtons.map((button) => (
+            <Button
+              key={button.value}
+              type={selectedPeriod === button.value ? "primary" : "default"}
+              loading={isLoading && selectedPeriod === button.value}
+              onClick={() => onPeriodChange(button.value)}
+            >
+              {button.label}
+            </Button>
+          ))}
+        </div>
+      </div>
 
-          <Progress
-            percent={insight.confidenceScore}
-            status="active"
-            style={{ marginTop: 12 }}
-          />
+      {!insight && !isLoading && (
+        <Alert
+          type="info"
+          title="AI insight is not generated yet."
+          description="Choose weekly, monthly or quarterly analysis to generate a report. This keeps the dashboard faster on initial page load."
+          showIcon
+        />
+      )}
 
-          <Paragraph
+      {isLoading && (
+        <Alert
+          type="info"
+          title="Generating AI analysis..."
+          description="OpenAI is analyzing workflow activity, risks and workload signals."
+          showIcon
+        />
+      )}
+
+      {insight && !isLoading && (
+        <>
+          <div
             style={{
-              marginBottom: 0,
-              color: "var(--text-muted)",
+              display: "flex",
+              gap: 12,
+              flexWrap: "wrap",
+              alignItems: "center",
+              marginBottom: 20,
             }}
           >
-            Based on current workflow and activity data.
-          </Paragraph>
-        </div>
-      </div>
+            <Tag color={riskColorMap[insight.overallRiskLevel]}>
+              {insight.overallRiskLevel.toUpperCase()} RISK
+            </Tag>
 
-      <div className="grid grid-2" style={{ marginTop: 24 }}>
-        <div>
-          <Title level={5}>Detected data signals</Title>
+            <Tag>{insight.modelLabel}</Tag>
 
-          <ul style={listStyle}>
-            {insight.keyFindings.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
+            <Tag>{insight.periodLabel}</Tag>
+          </div>
 
-        <div>
-          <Title level={5}>Next period priorities</Title>
-
-          <ul style={listStyle}>
-            {insight.nextPeriodPriorities.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 28 }}>
-        <Title level={5}>Risk signals</Title>
-
-        <div style={{ display: "grid", gap: 12 }}>
-          {insight.risks.map((risk) => (
+          <div className="grid grid-2" style={{ marginBottom: 24 }}>
             <div
-              key={risk.title}
               style={{
+                padding: 18,
                 border: "1px solid var(--border)",
-                borderRadius: 14,
-                padding: 16,
-                background: "#fff",
+                borderRadius: 16,
+                background: "var(--surface-soft)",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  marginBottom: 8,
-                }}
-              >
-                <Text strong>{risk.title}</Text>
+              <Title level={5} style={{ marginTop: 0 }}>
+                AI summary
+              </Title>
 
-                <Tag color={severityColorMap[risk.severity]}>
-                  {risk.severity.toUpperCase()}
-                </Tag>
-              </div>
-
-              <Paragraph
-                style={{
-                  marginBottom: 0,
-                  color: "var(--text-muted)",
-                }}
-              >
-                {risk.reason}
+              <Paragraph style={{ marginBottom: 0 }}>
+                {insight.summary}
               </Paragraph>
             </div>
-          ))}
-        </div>
-      </div>
 
-      <div style={{ marginTop: 28 }}>
-        <Title level={5}>Recommended actions</Title>
+            <div
+              style={{
+                padding: 18,
+                border: "1px solid var(--border)",
+                borderRadius: 16,
+                background: "var(--surface-soft)",
+              }}
+            >
+              <Title level={5} style={{ marginTop: 0 }}>
+                Confidence score
+              </Title>
 
-        <ul style={listStyle}>
-          {insight.recommendations.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </div>
+              <Progress percent={insight.confidenceScore} />
 
-      <Paragraph
-        style={{
-          marginTop: 24,
-          marginBottom: 0,
-          color: "var(--text-muted)",
-          fontSize: 13,
-        }}
-      >
-        Generated at {new Date(insight.generatedAt).toLocaleString()} from
-        workflow completions, activity decline, abandoned routines and workload
-        scores.
-      </Paragraph>
+              <Paragraph
+                style={{ color: "var(--text-muted)", marginBottom: 0 }}
+              >
+                Based on available workflow data and activity patterns.
+              </Paragraph>
+            </div>
+          </div>
+
+          {insight.keyFindings.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <Title level={4}>Detected signals</Title>
+
+              <div style={{ display: "grid", gap: 12 }}>
+                {insight.keyFindings.map((finding) => (
+                  <div
+                    key={finding}
+                    style={{
+                      padding: 16,
+                      border: "1px solid var(--border)",
+                      borderRadius: 14,
+                    }}
+                  >
+                    {finding}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {insight.nextPeriodPriorities.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <Title level={4}>Next period priorities</Title>
+
+              <ul style={{ marginBottom: 0 }}>
+                {insight.nextPeriodPriorities.map((priority) => (
+                  <li key={priority}>{priority}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {insight.risks.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <Title level={4}>Risk signals</Title>
+
+              <div style={{ display: "grid", gap: 12 }}>
+                {insight.risks.map((risk) => (
+                  <div
+                    key={`${risk.title}-${risk.reason}`}
+                    style={{
+                      padding: 16,
+                      border: "1px solid var(--border)",
+                      borderRadius: 14,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <strong>{risk.title}</strong>
+
+                      <Tag color={riskColorMap[risk.severity]}>
+                        {risk.severity.toUpperCase()}
+                      </Tag>
+                    </div>
+
+                    <Paragraph style={{ marginBottom: 0 }}>
+                      {risk.reason}
+                    </Paragraph>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {insight.recommendations.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <Title level={4}>Recommended actions</Title>
+
+              <ul style={{ marginBottom: 0 }}>
+                {insight.recommendations.map((recommendation) => (
+                  <li key={recommendation}>{recommendation}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <Paragraph style={{ color: "var(--text-muted)", marginBottom: 0 }}>
+            Generated at{" "}
+            {new Date(insight.generatedAt).toLocaleString("de-DE", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}{" "}
+            from workflow completions, activity decline, abandoned routines and
+            workload scores.
+          </Paragraph>
+        </>
+      )}
     </Card>
   );
 }

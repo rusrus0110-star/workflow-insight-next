@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Button, Spin, Typography } from "antd";
 import { useRouter } from "next/navigation";
 
@@ -48,6 +48,7 @@ type AiInsight = {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const hasAutoLoadedInsight = useRef(false);
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [insight, setInsight] = useState<AiInsight | null>(null);
@@ -60,10 +61,16 @@ export default function DashboardPage() {
   const loadInsight = useCallback(
     async (period: InsightPeriod) => {
       try {
+        setSelectedPeriod(period);
         setIsInsightLoading(true);
         setErrorMessage("");
 
-        const response = await fetch(`/api/ai/weekly-insight?period=${period}`);
+        const response = await fetch(
+          `/api/ai/weekly-insight?period=${period}`,
+          {
+            cache: "no-store",
+          },
+        );
 
         if (response.status === 401) {
           router.push("/login");
@@ -93,7 +100,9 @@ export default function DashboardPage() {
       setIsLoading(true);
       setErrorMessage("");
 
-      const statsResponse = await fetch("/api/stats/dashboard");
+      const statsResponse = await fetch("/api/stats/dashboard", {
+        cache: "no-store",
+      });
 
       if (statsResponse.status === 401) {
         router.push("/login");
@@ -109,8 +118,6 @@ export default function DashboardPage() {
       }
 
       setStats(statsResult.data);
-
-      await loadInsight(selectedPeriod);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Something went wrong",
@@ -118,12 +125,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [router, loadInsight, selectedPeriod]);
-
-  const handlePeriodChange = async (period: InsightPeriod) => {
-    setSelectedPeriod(period);
-    await loadInsight(period);
-  };
+  }, [router]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -135,20 +137,28 @@ export default function DashboardPage() {
     };
   }, [loadDashboard]);
 
+  useEffect(() => {
+    if (isLoading) return;
+    if (!stats) return;
+    if (hasAutoLoadedInsight.current) return;
+
+    hasAutoLoadedInsight.current = true;
+
+    const timer = window.setTimeout(() => {
+      void loadInsight("weekly");
+    }, 700);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isLoading, stats, loadInsight]);
+
   return (
     <main className="page-shell">
       <AppHeader />
 
-      <section className="page-container" style={{ padding: "40px 0 72px" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 24,
-            alignItems: "flex-start",
-            marginBottom: 28,
-          }}
-        >
+      <section className="page-container page-section">
+        <div className="page-heading">
           <div>
             <Title level={1} style={{ marginBottom: 8 }}>
               Operations Dashboard
@@ -167,15 +177,24 @@ export default function DashboardPage() {
             </Paragraph>
           </div>
 
-          <Button type="primary" onClick={loadDashboard}>
-            Refresh
-          </Button>
+          <div className="page-actions">
+            <Button
+              type="primary"
+              onClick={() => {
+                hasAutoLoadedInsight.current = false;
+                void loadDashboard();
+              }}
+            >
+              Refresh dashboard
+            </Button>
+          </div>
         </div>
 
         {errorMessage && (
           <Alert
             type="error"
-            message={errorMessage}
+            title={errorMessage}
+            showIcon
             style={{ marginBottom: 24 }}
           />
         )}
@@ -258,7 +277,7 @@ export default function DashboardPage() {
               insight={insight}
               selectedPeriod={selectedPeriod}
               isLoading={isInsightLoading}
-              onPeriodChange={handlePeriodChange}
+              onPeriodChange={loadInsight}
             />
           </>
         )}

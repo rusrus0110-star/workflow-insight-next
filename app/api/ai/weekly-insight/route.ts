@@ -3,11 +3,13 @@ import { NextRequest } from "next/server";
 import { HTTP_STATUS } from "@/lib/constants";
 import { errorResponse, successResponse } from "@/lib/api_response";
 import { getCurrentUserId } from "@/lib/auth";
-import { generateAiInsight, type InsightPeriod } from "@/services/ai_service";
+import { generateAiInsight } from "@/services/ai_service";
+
+type InsightPeriod = "weekly" | "monthly" | "quarterly";
 
 const allowedPeriods: InsightPeriod[] = ["weekly", "monthly", "quarterly"];
 
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const userId = await getCurrentUserId();
 
@@ -15,11 +17,10 @@ export async function GET(req: NextRequest) {
       return errorResponse("Unauthorized", HTTP_STATUS.UNAUTHORIZED);
     }
 
-    const { searchParams } = new URL(req.url);
-    const periodParam = searchParams.get("period") || "weekly";
+    const periodParam = request.nextUrl.searchParams.get("period") || "weekly";
 
     if (!allowedPeriods.includes(periodParam as InsightPeriod)) {
-      return errorResponse("Invalid analysis period", HTTP_STATUS.BAD_REQUEST);
+      return errorResponse("Invalid insight period", HTTP_STATUS.BAD_REQUEST);
     }
 
     const insight = await generateAiInsight(
@@ -28,8 +29,11 @@ export async function GET(req: NextRequest) {
     );
 
     return successResponse(
-      insight,
-      `${insight.periodLabel} AI insight generated`,
+      {
+        ...insight,
+        generatedAt: new Date().toISOString(),
+      },
+      "AI insight generated successfully",
     );
   } catch (error) {
     return errorResponse(
